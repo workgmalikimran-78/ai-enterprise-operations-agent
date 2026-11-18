@@ -9,19 +9,18 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ai.aiops.api.dto.AgentExecutionResponse;
 import com.ai.aiops.api.dto.OperationalAuditResponse;
+import com.ai.aiops.dashboard.AuditQueryService;
 import com.ai.aiops.repository.AgentExecutionRepository;
-import com.ai.aiops.repository.OperationalAuditRepository;
 
 @RestController
 @RequestMapping("/api/v1/audit")
 public class AuditController {
 
-    private final OperationalAuditRepository operationalAuditRepository;
+    private final AuditQueryService auditQueryService;
     private final AgentExecutionRepository agentExecutionRepository;
 
-    public AuditController(OperationalAuditRepository operationalAuditRepository,
-                            AgentExecutionRepository agentExecutionRepository) {
-        this.operationalAuditRepository = operationalAuditRepository;
+    public AuditController(AuditQueryService auditQueryService, AgentExecutionRepository agentExecutionRepository) {
+        this.auditQueryService = auditQueryService;
         this.agentExecutionRepository = agentExecutionRepository;
     }
 
@@ -29,7 +28,7 @@ public class AuditController {
     public Page<OperationalAuditResponse> operationalAudits(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return operationalAuditRepository.findAll(PageRequest.of(page, size)).map(OperationalAuditResponse::from);
+        return auditQueryService.list(PageRequest.of(page, size));
     }
 
     @GetMapping("/agent-executions")

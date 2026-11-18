@@ -17,25 +17,24 @@ import com.ai.aiops.api.dto.AgentExecutionResponse;
 import com.ai.aiops.api.dto.IncidentResponse;
 import com.ai.aiops.api.dto.RcaResponse;
 import com.ai.aiops.api.dto.RemediationRecommendationResponse;
-import com.ai.aiops.common.exception.ResourceNotFoundException;
+import com.ai.aiops.dashboard.IncidentQueryService;
 import com.ai.aiops.remediation.RemediationRecommendationService;
 import com.ai.aiops.repository.AgentExecutionRepository;
-import com.ai.aiops.repository.IncidentRepository;
 
 @RestController
 @RequestMapping("/api/v1/incidents")
 public class IncidentController {
 
-    private final IncidentRepository incidentRepository;
+    private final IncidentQueryService incidentQueryService;
     private final RootCauseAnalysisService rootCauseAnalysisService;
     private final RemediationRecommendationService remediationRecommendationService;
     private final AgentExecutionRepository agentExecutionRepository;
 
-    public IncidentController(IncidentRepository incidentRepository,
+    public IncidentController(IncidentQueryService incidentQueryService,
                                RootCauseAnalysisService rootCauseAnalysisService,
                                RemediationRecommendationService remediationRecommendationService,
                                AgentExecutionRepository agentExecutionRepository) {
-        this.incidentRepository = incidentRepository;
+        this.incidentQueryService = incidentQueryService;
         this.rootCauseAnalysisService = rootCauseAnalysisService;
         this.remediationRecommendationService = remediationRecommendationService;
         this.agentExecutionRepository = agentExecutionRepository;
@@ -46,17 +45,12 @@ public class IncidentController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Page<com.ai.aiops.domain.Incident> incidents = status != null
-                ? incidentRepository.findByStatus(status, PageRequest.of(page, size))
-                : incidentRepository.findAll(PageRequest.of(page, size));
-        return incidents.map(IncidentResponse::from);
+        return incidentQueryService.list(status, PageRequest.of(page, size));
     }
 
     @GetMapping("/{id}")
     public IncidentResponse getById(@PathVariable UUID id) {
-        return incidentRepository.findById(id)
-                .map(IncidentResponse::from)
-                .orElseThrow(() -> new ResourceNotFoundException("Incident not found: " + id));
+        return incidentQueryService.getById(id);
     }
 
     @PostMapping("/{id}/investigate")

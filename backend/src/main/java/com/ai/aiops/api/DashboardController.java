@@ -11,18 +11,18 @@ import com.ai.aiops.api.dto.DashboardMetricsResponse;
 import com.ai.aiops.api.dto.DashboardOverviewResponse;
 import com.ai.aiops.api.dto.IncidentResponse;
 import com.ai.aiops.dashboard.DashboardService;
-import com.ai.aiops.repository.IncidentRepository;
+import com.ai.aiops.dashboard.IncidentQueryService;
 
 @RestController
 @RequestMapping("/api/v1/dashboard")
 public class DashboardController {
 
     private final DashboardService dashboardService;
-    private final IncidentRepository incidentRepository;
+    private final IncidentQueryService incidentQueryService;
 
-    public DashboardController(DashboardService dashboardService, IncidentRepository incidentRepository) {
+    public DashboardController(DashboardService dashboardService, IncidentQueryService incidentQueryService) {
         this.dashboardService = dashboardService;
-        this.incidentRepository = incidentRepository;
+        this.incidentQueryService = incidentQueryService;
     }
 
     @GetMapping("/overview")
@@ -37,6 +37,6 @@ public class DashboardController {
 
     @GetMapping("/incidents")
     public Page<IncidentResponse> recentIncidents(@RequestParam(defaultValue = "10") int size) {
-        return incidentRepository.findAll(PageRequest.of(0, size)).map(IncidentResponse::from);
+        return incidentQueryService.list(null, PageRequest.of(0, size));
     }
 }
