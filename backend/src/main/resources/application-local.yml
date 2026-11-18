@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/aiops
+    username: aiops
+    password: aiops
+  data:
+    redis:
+      host: localhost
+      port: 6380
+  kafka:
+    bootstrap-servers: localhost:9093
+
+aiops:
+  opensearch:
+    host: localhost
+    port: 9201
+    scheme: http

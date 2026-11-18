@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: aiops-agent
+  profiles:
+    default: local
+  autoconfigure:
+    # LLM integration isn't wired up until Phase 4 - excluding these avoids forcing an API key
+    # requirement on every app/test startup for a feature that isn't live yet.
+    exclude:
+      - org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
+      - org.springframework.ai.autoconfigure.vertexai.gemini.VertexAiGeminiAutoConfiguration
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  pattern:
+    level: "%5p [%X{correlationId}]"
+
+aiops:
+  llm:
+    provider: openai # openai | gemini - not used until Phase 4
+  anomaly:
+    rule:
+      threshold: 10
+      window-minutes: 5
+    statistical:
+      zscore-threshold: 2.5
+      window-minutes: 5
+      baseline-sample-size: 12
