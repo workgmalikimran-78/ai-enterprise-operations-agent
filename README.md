@@ -58,10 +58,23 @@ npm install
 npm run dev     # http://localhost:5173, proxies /api to localhost:8081
 ```
 
-## Verifying it works
+## Quick health check
 
 ```bash
 curl http://localhost:8081/actuator/health
+```
+
+Swagger UI: http://localhost:8081/swagger-ui.html
+
+## Application flow — end-to-end walkthrough
+
+The platform is a pipeline: **logs → anomaly → incident → RCA → remediation recommendation →
+human approval → execution → verification**. Every stage is a real REST call and shows up in the
+dashboard (`npm run dev` in `frontend/`, see [Running the frontend](#running-the-frontend)).
+
+### 1. Ingest logs
+
+```bash
 curl -X POST http://localhost:8081/api/v1/logs/ingest -H "Content-Type: application/json" -d '{
   "service": "order-service",
   "environment": "production",
@@ -73,21 +86,140 @@ curl -X POST http://localhost:8081/api/v1/logs/ingest -H "Content-Type: applicat
 curl "http://localhost:8081/api/v1/logs/search?service=order-service"
 ```
 
-Swagger UI: http://localhost:8081/swagger-ui.html
+`service` doubles as the application identifier — the first time a given `service`/`environment`
+pair is seen, its `Application`/`Environment`/default `Tenant` rows are auto-created (see
+`ApplicationResolver`). Check it landed in OpenSearch via the search call above, or watch it
+stream into the **Live Monitoring** page.
 
-Sending ≥10 `ERROR` events for the same service + exception type within 5 minutes will raise a
-rule-based anomaly (`aiops.anomaly.rule.threshold`, default 10); anomalies at `HIGH`/`CRITICAL`
-severity open an incident. From there:
+### 2. Anomaly detection
+
+Sending ≥10 `ERROR` events for the *same* service + exception type within 5 minutes
+(`aiops.anomaly.rule.threshold` / `window-minutes`) raises a rule-based anomaly:
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/incidents/{id}/investigate   # RCA agent (needs OPENAI_API_KEY)
-curl -X POST http://localhost:8081/api/v1/incidents/{id}/recommendations  # remediation agent
-curl -X POST http://localhost:8081/api/v1/approvals/{id}/approve -d '{"approverEmail":"ops@example.com"}'
-curl -X POST http://localhost:8081/api/v1/remediations/{id}/execute   # runs the real K8s tool
+for i in $(seq 1 10); do
+  curl -s -o /dev/null -X POST http://localhost:8081/api/v1/logs/ingest -H "Content-Type: application/json" -d "{
+    \"service\": \"order-service\", \"environment\": \"production\", \"level\": \"ERROR\",
+    \"traceId\": \"trace-$i\", \"message\": \"Database connection timeout\",
+    \"exception\": { \"type\": \"SQLTransientConnectionException\", \"message\": \"timed out\" }
+  }"
+done
+curl "http://localhost:8081/api/v1/anomalies?status=OPEN"
 ```
 
-Emergency kill switch for all mutating K8s actions: `POST /api/v1/admin/execution/disable` /
-`/enable`.
+**Note on severity:** the rule-based detector's dedup logic always fires exactly once, at the
+moment the count first reaches the threshold — so under normal sequential traffic its anomalies
+always land at `MEDIUM` severity (this is correct, documented behavior; see
+`RuleBasedAnomalyDetector` and `AnomalyDetectionIntegrationTest`). Only `HIGH`/`CRITICAL` severity
+opens an `Incident` (`IncidentService`), so a single burst like the one above will **not**
+produce an incident by itself. The statistical (z-score) detector can reach `HIGH`/`CRITICAL`
+organically, but needs ~15-20 minutes of sustained traffic to accumulate a baseline first — not
+practical for a quick walkthrough. To exercise the rest of the pipeline immediately, skip ahead to
+step 3a below instead of waiting.
+
+### 3a. Fast-forward: seed a `HIGH`-severity incident directly
+
+This is exactly how Phase 6's K8s execution tools were live-tested against a real cluster — it's
+a legitimate way to drive the pipeline without waiting on the statistical detector:
+
+```bash
+docker compose exec -T postgres psql -U aiops -d aiops -c "
+INSERT INTO incidents (tenant_id, application_id, title, status, severity, opened_at)
+SELECT tenant_id, id, 'order-service: database connection exhaustion', 'OPEN', 'HIGH', now()
+FROM applications WHERE name='order-service'
+RETURNING id;"
+```
+
+Copy the returned `id` as `INCIDENT_ID` for the steps below. (`GET /api/v1/incidents` lists
+everything, `GET /api/v1/incidents/{id}` fetches one — both also drive the **Incidents** page.)
+
+### 3b. Investigate — AI root cause analysis
+
+```bash
+curl -X POST http://localhost:8081/api/v1/incidents/$INCIDENT_ID/investigate
+curl http://localhost:8081/api/v1/incidents/$INCIDENT_ID/analysis
+```
+
+Needs `OPENAI_API_KEY` set on the `app` container/process — without it, this returns a 503
+(`LlmUnavailableException`) wrapping the underlying auth failure rather than crashing the app.
+The `InvestigationAgent` gathers evidence
+first (linked anomalies, recent error logs, historical incidents, matching runbooks — no LLM call
+yet), then `RootCauseAnalysisAgent` sends that evidence to the LLM with an explicit guardrail:
+log/exception content is labeled as untrusted DATA, never instructions (see
+`RootCauseAnalysisAgentTest` for a test that captures the real prompt and asserts this). The
+response includes a confidence score and distinguishes confirmed facts from hypotheses. Shows up
+on the incident detail page's "AI Root Cause Analysis" card.
+
+### 4. Generate a remediation recommendation
+
+```bash
+curl -X POST http://localhost:8081/api/v1/incidents/$INCIDENT_ID/recommendations
+curl http://localhost:8081/api/v1/incidents/$INCIDENT_ID/recommendations
+```
+
+The LLM picks one action from a **fixed catalog** (`RemediationActionType`) — it cannot invent an
+arbitrary command. Risk level and required approval level are derived deterministically from
+whichever action was chosen, never trusted from the LLM's own output. Read-only/diagnostic actions
+(`CHECK_APPLICATION_HEALTH`, `RETRIEVE_RECENT_LOGS`, `CHECK_SERVICE_STATUS`,
+`INVESTIGATE_FURTHER`) need no approval; anything that mutates a deployment
+(`RESTART_DEPLOYMENT`, `SCALE_DEPLOYMENT`, `ROLLBACK_DEPLOYMENT`) always requires one. Copy the
+returned recommendation `id` as `REC_ID`.
+
+### 5. Approve or reject
+
+If the recommendation needed approval, `GET /api/v1/approvals?status=PENDING` will show it:
+
+```bash
+curl "http://localhost:8081/api/v1/approvals?status=PENDING"
+curl -X POST http://localhost:8081/api/v1/approvals/{approvalId}/approve \
+  -H "Content-Type: application/json" -d '{"approverEmail":"ops@example.com"}'
+# or: .../reject -d '{"approverEmail":"ops@example.com","reason":"too risky right now"}'
+```
+
+Approvals expire on a schedule (`aiops.approval.ttl-hours`, default 24) and can only be decided
+once — a second approve/reject on the same request is rejected with a 400. All of this is the
+**Remediation Center** page (approve/reject buttons, execute button once approved).
+
+### 6. Execute
+
+```bash
+curl -X POST http://localhost:8081/api/v1/remediations/$REC_ID/execute
+curl http://localhost:8081/api/v1/remediations/$REC_ID/status
+```
+
+Runs the real, predefined Kubernetes tool (`KubernetesOperationalTools`) for the chosen action
+against `aiops.execution.default-namespace` (default `default`), targeting a deployment named
+after the `service`. Every mutating call passes through `ExecutionGuard` first: the emergency kill
+switch, a namespace allowlist, and a per-target rate limit. Calling `/execute` again with the same
+`REC_ID` is safe — it returns the already-recorded result instead of re-running (idempotency key =
+recommendation ID).
+
+Emergency kill switch for **all** mutating K8s actions, cluster-wide:
+```bash
+curl -X POST http://localhost:8081/api/v1/admin/execution/disable
+curl -X POST http://localhost:8081/api/v1/admin/execution/enable
+curl http://localhost:8081/api/v1/admin/execution/status
+```
+
+### 7. Verification (automatic)
+
+A scheduled job (`aiops.verification.check-interval-minutes`, default 5) picks up executions
+completed ≥5 minutes ago that haven't been verified yet, compares error volume before/after via
+`VerificationAgent`, and updates the incident's status: `RESOLVED` (zero errors since), `MITIGATED`
+(meaningful drop but not zero), or left as-is (`UNRESOLVED` — no automatic change, needs more
+action). Nothing to call manually; just re-check `GET /api/v1/incidents/$INCIDENT_ID` a few minutes
+later, or watch its status badge update on the **Incidents** page.
+
+### Everything, at a glance
+
+```bash
+curl http://localhost:8081/api/v1/dashboard/overview    # counts, MTTD/MTTR, AI investigation stats
+curl http://localhost:8081/api/v1/dashboard/metrics      # breakdowns by severity/status/type
+curl http://localhost:8081/api/v1/audit                  # who/what/when audit trail
+curl http://localhost:8081/api/v1/audit/agent-executions # every agent run, success or failure
+```
+
+Same data as the **Overview** and **Audit Center** pages.
 
 ## Running the test suite
 
