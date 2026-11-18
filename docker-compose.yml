@@ -91,6 +91,9 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       AIOPS_OPENSEARCH_HOST: opensearch
       AIOPS_OPENSEARCH_PORT: 9200
+      # Was previously undeclared here, so setting it on the host before `docker compose up` had
+      # no effect on the container - the app always started with no key configured.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     ports:
       - "8081:8080"
     depends_on:
@@ -102,6 +105,15 @@ services:
         condition: service_healthy
       opensearch:
         condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: aiops-frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      - app
 
 volumes:
   aiops-postgres-data:

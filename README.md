@@ -21,12 +21,11 @@ are deliberately deferred and called out explicitly rather than silently skipped
 - An `OPENAI_API_KEY` for Phases 4-5's AI agents — optional otherwise; the app starts fine without
   one, agents just fail with a clear error when invoked
 
-## Running the backend locally via Docker Compose
+## Running everything via Docker Compose
 
 ```bash
 docker compose up -d postgres redis kafka opensearch   # wait for all to report healthy
-OPENAI_API_KEY=sk-... docker compose build app
-OPENAI_API_KEY=sk-... docker compose up -d app
+OPENAI_API_KEY=sk-... docker compose up -d --build app frontend
 ```
 
 Services and their **host-mapped** ports (remapped from Kafka/Postgres/Redis/OpenSearch
@@ -34,12 +33,18 @@ defaults to avoid clashing with other projects running on this machine):
 
 | Service | Host port | Notes |
 |---|---|---|
+| Frontend | 3001 | nginx serving the built React app, proxies `/api/*` to the `app` service internally |
 | App | 8081 | `SPRING_PROFILES_ACTIVE=local` |
 | Postgres | 5433 | db `aiops`, user/pass `aiops`/`aiops` |
 | Redis | 6380 | |
 | Kafka | 9093 (external), 9092 (internal) | KRaft mode, no Zookeeper. Dual listeners so both containers and host-based clients can connect |
 | OpenSearch | 9201 | security plugin disabled for local dev |
 | OpenSearch Dashboards | 5602 | |
+
+Open **http://localhost:3001** for the dashboard — the frontend container's nginx config
+(`frontend/nginx.conf`) proxies `/api/*` to `http://app:8080` on the internal Docker network, and
+falls back to `index.html` for client-side routes (React Router), so deep links like
+`/incidents/{id}` work on a hard refresh too.
 
 Inside the Docker network, containers talk to each other on the standard internal ports
 (`postgres:5432`, `redis:6379`, `kafka:9092`, `opensearch:9200`) — only the host-side mappings
@@ -50,12 +55,15 @@ dockerized dependencies, `application-local.yml` already points at the host-mapp
 This is also how Phase 6's K8s tools were live-tested — the app needs a real `~/.kube/config`,
 which a container doesn't have by default.
 
-## Running the frontend
+## Running the frontend outside Docker (optional)
+
+For frontend-only iteration with hot reload, skip the `frontend` container and run Vite directly
+against the dockerized (or IDE-run) backend:
 
 ```bash
 cd frontend
 npm install
-npm run dev     # http://localhost:5173, proxies /api to localhost:8081
+npm run dev     # http://localhost:5173, proxies /api to localhost:8081 (see vite.config.ts)
 ```
 
 ## Quick health check
@@ -69,8 +77,9 @@ Swagger UI: http://localhost:8081/swagger-ui.html
 ## Application flow — end-to-end walkthrough
 
 The platform is a pipeline: **logs → anomaly → incident → RCA → remediation recommendation →
-human approval → execution → verification**. Every stage is a real REST call and shows up in the
-dashboard (`npm run dev` in `frontend/`, see [Running the frontend](#running-the-frontend)).
+human approval → execution → verification**. Every stage is a real REST call and shows up on the
+dashboard at **http://localhost:3001** (or http://localhost:5173 if running the frontend outside
+Docker).
 
 ### 1. Ingest logs
 
