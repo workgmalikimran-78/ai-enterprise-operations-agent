@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiops-app
+  namespace: aiops
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: aiops-app }
+  template:
+    metadata:
+      labels: { app: aiops-app }
+    spec:
+      serviceAccountName: aiops-app
+      containers:
+        - name: aiops-app
+          image: aiops-agent-app:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8080 }]
+          envFrom:
+            - configMapRef: { name: aiops-app-config }
+          env:
+            - name: SPRING_DATASOURCE_USERNAME
+              value: aiops
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: aiops-secrets, key: postgres-password }
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef: { name: aiops-secrets, key: openai-api-key }
+          readinessProbe:
+            httpGet: { path: /actuator/health, port: 8080 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /actuator/health, port: 8080 }
+            initialDelaySeconds: 40
+            periodSeconds: 20
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits: { cpu: "1", memory: "1Gi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiops-app
+  namespace: aiops
+spec:
+  selector: { app: aiops-app }
+  ports: [{ port: 8080, targetPort: 8080 }]
+  type: ClusterIP

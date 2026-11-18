@@ -1,0 +1,42 @@
+# Least-privilege RBAC for the operational execution tools (KubernetesOperationalTools): read
+# access to pods/services, read+patch+scale on deployments, read on replicasets (for rollback
+# revision lookup) - scoped to the "default" namespace only, matching
+# AIOPS_EXECUTION_ALLOWED_NAMESPACES. Nothing beyond what the fixed tool catalog actually needs.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aiops-app
+  namespace: aiops
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aiops-execution-role
+  namespace: default
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aiops-execution-rolebinding
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: aiops-app
+    namespace: aiops
+roleRef:
+  kind: Role
+  name: aiops-execution-role
+  apiGroup: rbac.authorization.k8s.io

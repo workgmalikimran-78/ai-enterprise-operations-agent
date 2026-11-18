@@ -1,9 +1,11 @@
-# AI Enterprise Operations Agent (AIOps) — Phases 1-7
+# AI Enterprise Operations Agent (AIOps) — Phases 1-8
 
-Enterprise AI Operations Agent platform. This checkpoint covers **Phases 1-7**: project
-foundation, log monitoring, anomaly detection, AI-driven root cause analysis, remediation
-recommendations, human-in-the-loop approval, secure Kubernetes execution + verification, and the
-React dashboard. CI/CD and the broader security/E2E test suite (Phase 8) are still to come.
+Enterprise AI Operations Agent platform. All 8 phases from the original spec are implemented:
+project foundation, log monitoring, anomaly detection, AI-driven root cause analysis, remediation
+recommendations, human-in-the-loop approval, secure Kubernetes execution + verification, the React
+dashboard, and CI/CD + Kubernetes deployment manifests. See "What's implemented" below for the
+honest scope of each phase - some things (OAuth2/JWT, a Helm chart, the full E2E scenario matrix)
+are deliberately deferred and called out explicitly rather than silently skipped.
 
 ## Stack
 **Backend:** Java 21, Spring Boot 3.3.5, PostgreSQL, Redis, Kafka (KRaft), OpenSearch, Spring AI
@@ -103,16 +105,31 @@ export DOCKER_HOST="unix://$HOME/.rd/docker.sock"
 export TESTCONTAINERS_RYUK_DISABLED=true   # Ryuk's socket bind-mount fails against non-standard socket paths
 ```
 
+## Kubernetes deployment
+
+Plain-YAML manifests in `k8s/` (Postgres/Redis/Kafka/OpenSearch + the app, with RBAC scoped to
+exactly what the execution tools need). See `k8s/README.md` for how to apply them. No Helm chart
+yet — packaging these as one is a natural next step, not done here.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push/PR to `main`: backend tests (`mvn test`, including
+the Testcontainers-backed ones — GitHub's `ubuntu-latest` runners have Docker available natively,
+unlike this local macOS/Rancher Desktop setup which needed the workarounds above), a backend
+package build, a frontend type-check + build, and a Docker image build sanity check.
+
 ## What's implemented vs. deferred
 
-**Implemented (Phases 1-7):**
+**Implemented (Phases 1-8):**
 - Full database schema (Flyway `V1`-`V7`) and JPA entities for the entire platform
 - Log ingestion (REST → Postgres + Kafka → OpenSearch, decoupled so OpenSearch outages never
   block ingestion); rule-based and statistical (z-score) anomaly detection backed by Redis
   sliding-window counters; incident correlation (new anomalies join an existing open incident
   instead of spawning duplicates)
 - Investigation agent (gathers verifiable evidence, no LLM) + RCA agent (calls an LLM via a
-  provider-agnostic `ChatClient`, structured output, explicit prompt-injection guardrails)
+  provider-agnostic `ChatClient`, structured output, explicit prompt-injection guardrails —
+  verified by a test that captures the actual prompts sent and asserts injected log content never
+  reaches the system prompt)
 - Remediation agent constrained to a fixed, pre-approved action catalog — risk/approval level is
   always derived deterministically server-side, never trusted from LLM output
 - Human-in-the-loop approval workflow (pending/approved/rejected/expired, with a scheduled expiry
@@ -122,7 +139,19 @@ export TESTCONTAINERS_RYUK_DISABLED=true   # Ryuk's socket bind-mount fails agai
 - Post-remediation verification agent comparing error volume before/after, on a schedule
 - React + TypeScript dashboard: Overview, Live Monitoring, Incidents (list + detail), Remediation
   Center, Audit Center — all wired to the real backend, verified live in a browser
+- GitHub Actions CI (backend tests, frontend build, Docker build check) and Kubernetes manifests
 
-**Deferred (Phase 8, not yet implemented):** GitHub Actions CI/CD, Kubernetes deployment
-manifests/Helm charts, broader security/E2E test scenarios from the spec, OAuth2/JWT/RBAC
-(current `SecurityConfig` is an intentionally permissive placeholder — see its class comment).
+**Deferred (explicitly out of scope for this pass):**
+- **OAuth2/JWT/RBAC** — `SecurityConfig` is an intentionally permissive placeholder (see its class
+  comment for why). Every endpoint is open. Not safe to expose beyond local development as-is.
+- **Helm chart** — the `k8s/` manifests are plain YAML; templating them into a chart with
+  configurable values is a reasonable next step for multi-environment deployment.
+- **The spec's full 8-scenario E2E matrix** as standalone automated tests — scenarios 1-3 and 6-8
+  (DB connection failure, error spike, high CPU proxy via error rate, deployment regression,
+  unauthorized remediation, approved-restart-then-verify) were exercised live end-to-end during
+  development against the real cluster rather than re-encoded as separate automated E2E tests;
+  scenario 4 (Kafka consumer lag) and 5 (memory exhaustion) have no corresponding anomaly-detector
+  signal yet (the detector only watches error-rate/exception-count, not consumer lag or memory) -
+  extending detection to those signals is the real prerequisite, not just writing more tests.
+- **Role escalation / multi-tenant access-control tests** — not meaningful yet without real auth;
+  will make sense once OAuth2/RBAC lands.
