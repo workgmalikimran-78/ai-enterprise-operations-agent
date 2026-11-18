@@ -94,6 +94,8 @@ services:
       # Was previously undeclared here, so setting it on the host before `docker compose up` had
       # no effect on the container - the app always started with no key configured.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AIOPS_LLM_PROVIDER: ${AIOPS_LLM_PROVIDER:-openai}
     ports:
       - "8081:8080"
     depends_on:

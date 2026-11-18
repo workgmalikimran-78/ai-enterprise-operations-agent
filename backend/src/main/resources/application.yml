@@ -4,13 +4,15 @@ spring:
   profiles:
     default: local
   autoconfigure:
-    # Both providers' own autoconfiguration classes are excluded: Spring AI's OpenAiAutoConfiguration
-    # asserts the API key is non-blank at bean-creation time, which would crash app startup whenever
-    # OPENAI_API_KEY isn't set - config.LlmConfig builds the OpenAiApi/ChatModel/ChatClient beans
-    # itself instead, tolerating a blank key at startup and only failing (with a clear error) when an
-    # agent actually tries to call the LLM. Gemini isn't configured in this environment at all.
+    # Every provider's own autoconfiguration class is excluded: Spring AI's OpenAiAutoConfiguration/
+    # AnthropicAutoConfiguration both assert their API key is non-blank at bean-creation time, which
+    # would crash app startup whenever that key isn't set - config.LlmConfig builds the chosen
+    # provider's ChatModel/ChatClient beans itself instead, tolerating a blank key at startup and
+    # only failing (with a clear error) when an agent actually tries to call the LLM. Gemini isn't
+    # configured in this environment at all.
     exclude:
       - org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
+      - org.springframework.ai.autoconfigure.anthropic.AnthropicAutoConfiguration
       - org.springframework.ai.autoconfigure.vertexai.gemini.VertexAiGeminiAutoConfiguration
   ai:
     openai:
@@ -18,6 +20,11 @@ spring:
       chat:
         options:
           model: gpt-4o-mini
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+      chat:
+        options:
+          model: claude-sonnet-4-5
   jackson:
     serialization:
       write-dates-as-timestamps: false
@@ -56,7 +63,7 @@ logging:
 
 aiops:
   llm:
-    provider: openai # openai | gemini
+    provider: ${AIOPS_LLM_PROVIDER:openai} # openai | anthropic (gemini not implemented yet)
   anomaly:
     rule:
       threshold: 10

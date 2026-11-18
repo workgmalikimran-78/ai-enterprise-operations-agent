@@ -18,14 +18,20 @@ are deliberately deferred and called out explicitly rather than silently skipped
 - Docker (tested against Rancher Desktop in `moby`/dockerd mode)
 - A local Kubernetes cluster for Phase 6's execution tools (tested against Rancher Desktop's
   bundled k3s) — optional for Phases 1-5/7, required to actually run restart/scale/rollback
-- An `OPENAI_API_KEY` for Phases 4-5's AI agents — optional otherwise; the app starts fine without
-  one, agents just fail with a clear error when invoked
+- An `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` for Phases 4-5's AI agents — optional otherwise; the
+  app starts fine without one, agents just fail with a clear error when invoked. Provider is
+  chosen via `AIOPS_LLM_PROVIDER` (`openai` or `anthropic`, default `openai`) — see `LlmConfig`
 
 ## Running everything via Docker Compose
 
+Copy `.env.example` to `.env` and fill in whichever LLM provider's key you're using (`.env` is
+gitignored - docker-compose reads it automatically, no need to export anything by hand):
+
 ```bash
+cp .env.example .env
+# edit .env: set AIOPS_LLM_PROVIDER=openai or anthropic, and the matching API key
 docker compose up -d postgres redis kafka opensearch   # wait for all to report healthy
-OPENAI_API_KEY=sk-... docker compose up -d --build app frontend
+docker compose up -d --build app frontend
 ```
 
 Services and their **host-mapped** ports (remapped from Kafka/Postgres/Redis/OpenSearch
@@ -149,9 +155,9 @@ curl -X POST http://localhost:8081/api/v1/incidents/$INCIDENT_ID/investigate
 curl http://localhost:8081/api/v1/incidents/$INCIDENT_ID/analysis
 ```
 
-Needs `OPENAI_API_KEY` set on the `app` container/process — without it, this returns a 503
-(`LlmUnavailableException`) wrapping the underlying auth failure rather than crashing the app.
-The `InvestigationAgent` gathers evidence
+Needs `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` set (matching `AIOPS_LLM_PROVIDER`, via `.env`) on
+the `app` container/process — without it, this returns a 503 (`LlmUnavailableException`) wrapping
+the underlying auth failure rather than crashing the app. The `InvestigationAgent` gathers evidence
 first (linked anomalies, recent error logs, historical incidents, matching runbooks — no LLM call
 yet), then `RootCauseAnalysisAgent` sends that evidence to the LLM with an explicit guardrail:
 log/exception content is labeled as untrusted DATA, never instructions (see
