@@ -122,6 +122,12 @@
             <artifactId>kubernetes-client</artifactId>
             <version>${fabric8.version}</version>
         </dependency>
+        <!-- Needed by the Fabric8 client to parse EC client keys (e.g. Rancher Desktop's kubeconfig) -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcpkix-jdk18on</artifactId>
+            <version>1.78.1</version>
+        </dependency>
 
         <!-- API docs -->
         <dependency>

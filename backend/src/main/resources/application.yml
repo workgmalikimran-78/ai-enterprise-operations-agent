@@ -56,7 +56,7 @@ logging:
 
 aiops:
   llm:
-    provider: openai # openai | gemini - not used until Phase 4
+    provider: openai # openai | gemini
   anomaly:
     rule:
       threshold: 10
@@ -65,3 +65,13 @@ aiops:
       zscore-threshold: 2.5
       window-minutes: 5
       baseline-sample-size: 12
+  approval:
+    ttl-hours: 24
+    expiry-check-minutes: 60
+  execution:
+    enabled: true
+    allowed-namespaces: default
+    max-per-hour: 5
+    default-namespace: default
+  verification:
+    check-interval-minutes: 5

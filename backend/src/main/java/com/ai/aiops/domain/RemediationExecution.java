@@ -14,7 +14,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Schema-complete shell; business logic (secure K8s execution tools) lands in Phase 6. */
 @Entity
 @Table(name = "remediation_executions")
 @Getter
@@ -23,7 +22,12 @@ import lombok.Setter;
 public class RemediationExecution extends BaseCreatedEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "approval_request_id", nullable = false)
+    @JoinColumn(name = "remediation_recommendation_id")
+    private RemediationRecommendation remediationRecommendation;
+
+    /** Null for read-only/diagnostic actions (required_approval_level = NONE), which never need approval. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "approval_request_id")
     private ApprovalRequest approvalRequest;
 
     @Column(nullable = false)
@@ -43,4 +47,7 @@ public class RemediationExecution extends BaseCreatedEntity {
 
     @Column(name = "result_log", columnDefinition = "text")
     private String resultLog;
+
+    @Column(name = "verified_at")
+    private Instant verifiedAt;
 }
