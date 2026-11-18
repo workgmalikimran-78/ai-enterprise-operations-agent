@@ -4,11 +4,20 @@ spring:
   profiles:
     default: local
   autoconfigure:
-    # LLM integration isn't wired up until Phase 4 - excluding these avoids forcing an API key
-    # requirement on every app/test startup for a feature that isn't live yet.
+    # Both providers' own autoconfiguration classes are excluded: Spring AI's OpenAiAutoConfiguration
+    # asserts the API key is non-blank at bean-creation time, which would crash app startup whenever
+    # OPENAI_API_KEY isn't set - config.LlmConfig builds the OpenAiApi/ChatModel/ChatClient beans
+    # itself instead, tolerating a blank key at startup and only failing (with a clear error) when an
+    # agent actually tries to call the LLM. Gemini isn't configured in this environment at all.
     exclude:
       - org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
       - org.springframework.ai.autoconfigure.vertexai.gemini.VertexAiGeminiAutoConfiguration
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: gpt-4o-mini
   jackson:
     serialization:
       write-dates-as-timestamps: false
