@@ -12,7 +12,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Schema-complete shell; business logic (remediation proposals) lands in Phase 5. */
 @Entity
 @Table(name = "remediation_recommendations")
 @Getter
@@ -32,4 +31,20 @@ public class RemediationRecommendation extends BaseCreatedEntity {
 
     @Column(name = "risk_level", nullable = false)
     private String riskLevel;
+
+    @Column(name = "expected_outcome", columnDefinition = "text")
+    private String expectedOutcome;
+
+    @Column(name = "business_impact", columnDefinition = "text")
+    private String businessImpact;
+
+    @Column(name = "rollback_strategy", columnDefinition = "text")
+    private String rollbackStrategy;
+
+    /** Deterministic, server-derived from actionType - never trusted from LLM output. */
+    @Column(name = "required_approval_level", nullable = false)
+    private String requiredApprovalLevel = "HIGH";
+
+    @Column(nullable = false)
+    private String status = "PROPOSED";
 }

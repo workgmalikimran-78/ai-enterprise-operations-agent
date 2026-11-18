@@ -1,0 +1,10 @@
+package com.ai.aiops.api.dto;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+
+public record ApprovalDecisionRequest(
+        @NotBlank @Email String approverEmail,
+        String reason
+) {
+}

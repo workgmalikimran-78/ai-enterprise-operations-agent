@@ -14,7 +14,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Schema-complete shell; business logic (human-in-the-loop approval workflow) lands in Phase 5. */
 @Entity
 @Table(name = "approval_requests")
 @Getter
@@ -42,4 +41,7 @@ public class ApprovalRequest extends BaseCreatedEntity {
 
     @Column(name = "expires_at")
     private Instant expiresAt;
+
+    @Column(name = "rejection_reason", columnDefinition = "text")
+    private String rejectionReason;
 }

@@ -1,5 +1,6 @@
 package com.ai.aiops.api;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -14,7 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ai.aiops.agent.RootCauseAnalysisService;
 import com.ai.aiops.api.dto.IncidentResponse;
 import com.ai.aiops.api.dto.RcaResponse;
+import com.ai.aiops.api.dto.RemediationRecommendationResponse;
 import com.ai.aiops.common.exception.ResourceNotFoundException;
+import com.ai.aiops.remediation.RemediationRecommendationService;
 import com.ai.aiops.repository.IncidentRepository;
 
 @RestController
@@ -23,11 +26,14 @@ public class IncidentController {
 
     private final IncidentRepository incidentRepository;
     private final RootCauseAnalysisService rootCauseAnalysisService;
+    private final RemediationRecommendationService remediationRecommendationService;
 
     public IncidentController(IncidentRepository incidentRepository,
-                               RootCauseAnalysisService rootCauseAnalysisService) {
+                               RootCauseAnalysisService rootCauseAnalysisService,
+                               RemediationRecommendationService remediationRecommendationService) {
         this.incidentRepository = incidentRepository;
         this.rootCauseAnalysisService = rootCauseAnalysisService;
+        this.remediationRecommendationService = remediationRecommendationService;
     }
 
     @GetMapping
@@ -56,5 +62,15 @@ public class IncidentController {
     @GetMapping("/{id}/analysis")
     public RcaResponse getAnalysis(@PathVariable UUID id) {
         return rootCauseAnalysisService.getLatestAnalysis(id);
+    }
+
+    @PostMapping("/{id}/recommendations")
+    public RemediationRecommendationResponse recommend(@PathVariable UUID id) {
+        return remediationRecommendationService.recommend(id);
+    }
+
+    @GetMapping("/{id}/recommendations")
+    public List<RemediationRecommendationResponse> listRecommendations(@PathVariable UUID id) {
+        return remediationRecommendationService.listForIncident(id);
     }
 }
