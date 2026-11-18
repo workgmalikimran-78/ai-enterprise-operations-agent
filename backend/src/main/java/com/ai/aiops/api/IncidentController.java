@@ -13,11 +13,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ai.aiops.agent.RootCauseAnalysisService;
+import com.ai.aiops.api.dto.AgentExecutionResponse;
 import com.ai.aiops.api.dto.IncidentResponse;
 import com.ai.aiops.api.dto.RcaResponse;
 import com.ai.aiops.api.dto.RemediationRecommendationResponse;
 import com.ai.aiops.common.exception.ResourceNotFoundException;
 import com.ai.aiops.remediation.RemediationRecommendationService;
+import com.ai.aiops.repository.AgentExecutionRepository;
 import com.ai.aiops.repository.IncidentRepository;
 
 @RestController
@@ -27,13 +29,16 @@ public class IncidentController {
     private final IncidentRepository incidentRepository;
     private final RootCauseAnalysisService rootCauseAnalysisService;
     private final RemediationRecommendationService remediationRecommendationService;
+    private final AgentExecutionRepository agentExecutionRepository;
 
     public IncidentController(IncidentRepository incidentRepository,
                                RootCauseAnalysisService rootCauseAnalysisService,
-                               RemediationRecommendationService remediationRecommendationService) {
+                               RemediationRecommendationService remediationRecommendationService,
+                               AgentExecutionRepository agentExecutionRepository) {
         this.incidentRepository = incidentRepository;
         this.rootCauseAnalysisService = rootCauseAnalysisService;
         this.remediationRecommendationService = remediationRecommendationService;
+        this.agentExecutionRepository = agentExecutionRepository;
     }
 
     @GetMapping
@@ -72,5 +77,14 @@ public class IncidentController {
     @GetMapping("/{id}/recommendations")
     public List<RemediationRecommendationResponse> listRecommendations(@PathVariable UUID id) {
         return remediationRecommendationService.listForIncident(id);
+    }
+
+    @GetMapping("/{id}/agent-executions")
+    public Page<AgentExecutionResponse> agentExecutions(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return agentExecutionRepository.findByIncidentIdOrderByCreatedAtDesc(id, PageRequest.of(page, size))
+                .map(AgentExecutionResponse::from);
     }
 }
