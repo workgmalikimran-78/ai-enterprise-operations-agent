@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ai.aiops.domain.Anomaly;
 import com.ai.aiops.domain.Incident;
 import com.ai.aiops.domain.IncidentAnomaly;
+import com.ai.aiops.domain.IncidentAnomalyId;
 import com.ai.aiops.kafka.DomainEventProducer;
 import com.ai.aiops.kafka.IncidentEventMessage;
 import com.ai.aiops.repository.IncidentAnomalyRepository;
@@ -48,7 +49,9 @@ public class IncidentService {
 
         if (!openIncidents.isEmpty()) {
             Incident existing = openIncidents.get(0);
-            linkAnomalyToIncident(existing, anomaly);
+            if (!linkAnomalyToIncident(existing, anomaly)) {
+                return; // already linked - e.g. a severity escalation re-running this check
+            }
             eventProducer.publishIncident(new IncidentEventMessage(
                     "INCIDENT_ANOMALY_LINKED", existing.getId(), anomaly.getApplication().getId(),
                     anomaly.getId(), anomaly.getSeverity()));
@@ -71,7 +74,14 @@ public class IncidentService {
                 anomaly.getSeverity()));
     }
 
-    private void linkAnomalyToIncident(Incident incident, Anomaly anomaly) {
+    /** Returns false (no-op) if this anomaly is already linked to this incident - keeps repeated
+     *  calls for the same anomaly (e.g. a later severity escalation) safe to re-run. */
+    private boolean linkAnomalyToIncident(Incident incident, Anomaly anomaly) {
+        IncidentAnomalyId id = new IncidentAnomalyId(incident.getId(), anomaly.getId());
+        if (incidentAnomalyRepository.existsById(id)) {
+            return false;
+        }
         incidentAnomalyRepository.save(new IncidentAnomaly(incident, anomaly));
+        return true;
     }
 }

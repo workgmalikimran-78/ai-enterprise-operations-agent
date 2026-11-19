@@ -56,4 +56,30 @@ public class AnomalyService {
 
         return saved;
     }
+
+    /**
+     * Raises an already-created anomaly's severity when later events in the same detection window
+     * push its count past a higher tier, and re-checks incident creation since that may now be the
+     * first time this anomaly qualifies (e.g. MEDIUM -> HIGH).
+     */
+    @Transactional
+    public Anomaly escalateSeverity(UUID anomalyId, String newSeverity, String description, long count) {
+        Anomaly anomaly = anomalyRepository.findById(anomalyId)
+                .orElseThrow(() -> new IllegalStateException("Unknown anomaly: " + anomalyId));
+
+        anomaly.setSeverity(newSeverity);
+        anomaly.setDescription(description);
+        Map<String, Object> updatedMetadata = new java.util.HashMap<>(anomaly.getMetadata());
+        updatedMetadata.put("count", count);
+        anomaly.setMetadata(updatedMetadata);
+        Anomaly saved = anomalyRepository.save(anomaly);
+
+        eventProducer.publishAnomaly(new AnomalyEventMessage(
+                saved.getId(), saved.getApplication().getId(), saved.getDetectionType(), newSeverity, description,
+                saved.getWindowStart(), saved.getWindowEnd()));
+
+        incidentService.maybeCreateIncident(saved);
+
+        return saved;
+    }
 }

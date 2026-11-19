@@ -23,6 +23,7 @@ import org.testcontainers.utility.DockerImageName;
 
 import com.ai.aiops.repository.AnomalyRepository;
 import com.ai.aiops.repository.ApplicationRepository;
+import com.ai.aiops.repository.IncidentRepository;
 
 /**
  * End-to-end: POST log events through the real ingest endpoint -> Kafka -> rule-based detector
@@ -62,6 +63,8 @@ class AnomalyDetectionIntegrationTest {
     @Autowired
     private ApplicationRepository applicationRepository;
     @Autowired
+    private IncidentRepository incidentRepository;
+    @Autowired
     private org.springframework.boot.test.web.client.TestRestTemplate restTemplate;
 
     @Test
@@ -84,13 +87,28 @@ class AnomalyDetectionIntegrationTest {
             assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
         }
 
-        // With a single sequential consumer, the dedup flag always wins at count == threshold,
-        // so this burst reliably produces a MEDIUM-severity anomaly (not HIGH/CRITICAL) - the
-        // severity-to-incident correlation thresholds themselves are covered by IncidentServiceTest.
+        // The anomaly fires the instant the count first crosses threshold=5 (always MEDIUM at that
+        // exact count), then escalates as the remaining events in this same burst keep incrementing
+        // the counter: count=10 crosses threshold*2 -> HIGH, which is enough to open an incident.
         boolean anomalyFound = waitUntil(Duration.ofSeconds(20), () ->
                 !findAnomaliesForService(service).isEmpty());
         assertThat(anomalyFound).isTrue();
-        assertThat(findAnomaliesForService(service).get(0).getSeverity()).isEqualTo("MEDIUM");
+
+        boolean escalatedToHigh = waitUntil(Duration.ofSeconds(20), () ->
+                "HIGH".equals(findAnomaliesForService(service).get(0).getSeverity()));
+        assertThat(escalatedToHigh).isTrue();
+
+        boolean incidentOpened = waitUntil(Duration.ofSeconds(20), () -> !findIncidentsForService(service).isEmpty());
+        assertThat(incidentOpened).isTrue();
+        assertThat(findIncidentsForService(service).get(0).getSeverity()).isEqualTo("HIGH");
+    }
+
+    private List<com.ai.aiops.domain.Incident> findIncidentsForService(String service) {
+        return resolveApplicationId(service)
+                .map(id -> incidentRepository.findAll().stream()
+                        .filter(i -> i.getApplication().getId().equals(id))
+                        .toList())
+                .orElseGet(List::of);
     }
 
     private List<com.ai.aiops.domain.Anomaly> findAnomaliesForService(String service) {

@@ -62,4 +62,32 @@ class AnomalyServiceTest {
         verify(eventProducer).publishAnomaly(any(AnomalyEventMessage.class));
         verify(incidentService).maybeCreateIncident(saved);
     }
+
+    @Test
+    void escalateSeverityUpdatesSeverityAndRechecksIncidentCreation() {
+        UUID anomalyId = UUID.randomUUID();
+        Application application = new Application();
+        application.setId(UUID.randomUUID());
+        Anomaly existing = new Anomaly();
+        existing.setId(anomalyId);
+        existing.setApplication(application);
+        existing.setDetectionType("RULE_BASED");
+        existing.setSeverity("MEDIUM");
+        existing.setMetadata(Map.of("count", 10L));
+        existing.setWindowStart(Instant.now().minusSeconds(300));
+        existing.setWindowEnd(Instant.now());
+
+        when(anomalyRepository.findById(anomalyId)).thenReturn(Optional.of(existing));
+        when(anomalyRepository.save(any(Anomaly.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AnomalyService service = new AnomalyService(anomalyRepository, applicationRepository, eventProducer,
+                incidentService);
+
+        Anomaly escalated = service.escalateSeverity(anomalyId, "HIGH", "now occurred 25 times", 25L);
+
+        assertThat(escalated.getSeverity()).isEqualTo("HIGH");
+        assertThat(escalated.getMetadata()).containsEntry("count", 25L);
+        verify(eventProducer).publishAnomaly(any(AnomalyEventMessage.class));
+        verify(incidentService).maybeCreateIncident(escalated);
+    }
 }

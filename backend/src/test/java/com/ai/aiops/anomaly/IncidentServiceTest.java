@@ -97,6 +97,23 @@ class IncidentServiceTest {
         verify(eventProducer).publishIncident(argThatTypeIs("INCIDENT_ANOMALY_LINKED"));
     }
 
+    @Test
+    void reEvaluatingAnAlreadyLinkedAnomalySkipsDuplicateLinkAndEvent() {
+        // Mirrors a severity escalation re-running maybeCreateIncident for an anomaly that was
+        // already linked on an earlier call - must not violate the incident_anomalies composite PK.
+        Anomaly anomaly = anomaly("CRITICAL");
+        Incident existing = new Incident();
+        existing.setId(UUID.randomUUID());
+        when(incidentRepository.findByApplicationIdAndStatusOrderByOpenedAtDesc(
+                anomaly.getApplication().getId(), "OPEN")).thenReturn(List.of(existing));
+        when(incidentAnomalyRepository.existsById(any())).thenReturn(true);
+
+        service().maybeCreateIncident(anomaly);
+
+        verify(incidentAnomalyRepository, never()).save(any());
+        verify(eventProducer, never()).publishIncident(any());
+    }
+
     private IncidentEventMessage argThatTypeIs(String type) {
         return org.mockito.ArgumentMatchers.argThat(msg -> msg.type().equals(type));
     }

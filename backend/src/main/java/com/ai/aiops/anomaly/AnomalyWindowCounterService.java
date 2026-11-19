@@ -44,4 +44,13 @@ public class AnomalyWindowCounterService {
         Boolean set = redisTemplate.opsForValue().setIfAbsent(key, "1", window);
         return Boolean.TRUE.equals(set);
     }
+
+    /** Stores an arbitrary value against the current window, used to remember e.g. an anomaly's id. */
+    public void remember(String key, String value, Duration window) {
+        redisTemplate.opsForValue().set(key, value, window);
+    }
+
+    public String recall(String key) {
+        return redisTemplate.opsForValue().get(key);
+    }
 }
