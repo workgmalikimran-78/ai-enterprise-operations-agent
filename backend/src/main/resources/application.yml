@@ -24,7 +24,7 @@ spring:
       api-key: ${ANTHROPIC_API_KEY:}
       chat:
         options:
-          model: claude-sonnet-4-5
+          model: claude-sonnet-4-6
   jackson:
     serialization:
       write-dates-as-timestamps: false

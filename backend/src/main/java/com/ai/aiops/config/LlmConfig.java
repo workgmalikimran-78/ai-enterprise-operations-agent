@@ -36,14 +36,19 @@ public class LlmConfig {
     @Value("${spring.ai.anthropic.api-key:}")
     private String anthropicApiKey;
 
-    @Value("${spring.ai.anthropic.chat.options.model:claude-sonnet-4-5}")
+    @Value("${spring.ai.anthropic.chat.options.model:claude-sonnet-4-6}")
     private String anthropicModel;
 
     @Bean
     public ChatModel chatModel() {
         if ("anthropic".equalsIgnoreCase(provider)) {
             AnthropicApi anthropicApi = new AnthropicApi(anthropicApiKey);
-            AnthropicChatOptions options = AnthropicChatOptions.builder().model(anthropicModel).build();
+            // Unlike OpenAI, Anthropic's API has no default and rejects requests outright
+            // without it ("max_tokens: Field required").
+            AnthropicChatOptions options = AnthropicChatOptions.builder()
+                    .model(anthropicModel)
+                    .maxTokens(4096)
+                    .build();
             return new AnthropicChatModel(anthropicApi, options);
         }
         OpenAiApi openAiApi = new OpenAiApi(openAiApiKey);

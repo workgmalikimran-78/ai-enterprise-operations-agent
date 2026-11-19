@@ -4,6 +4,9 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.stereotype.Component;
 
 import com.ai.aiops.agent.RcaOutput;
@@ -40,10 +43,12 @@ public class RemediationRecommendationAgent {
 
     private final ChatClient chatClient;
     private final ObjectMapper objectMapper;
+    private final BeanOutputConverter<RemediationOutput> outputConverter;
 
     public RemediationRecommendationAgent(ChatClient chatClient) {
         this.chatClient = chatClient;
         this.objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        this.outputConverter = new BeanOutputConverter<>(RemediationOutput.class);
     }
 
     public RemediationOutput recommend(RcaOutput rcaOutput, String incidentTitle, String incidentSeverity,
@@ -55,6 +60,9 @@ public class RemediationRecommendationAgent {
             throw new IllegalStateException("Failed to serialize RCA output", e);
         }
 
+        // Format instructions appended as plain string concatenation, not via ChatClient's
+        // .entity(Class) convenience method - see RootCauseAnalysisAgent for why that matters
+        // here (rcaJson below is raw JSON, and .entity()'s internal re-render chokes on it).
         String userPrompt = """
                 Incident: "%s" (severity %s) on application "%s"
 
@@ -62,14 +70,17 @@ public class RemediationRecommendationAgent {
                 %s
 
                 Propose the single best remediation action from the fixed catalog above.
-                """.formatted(incidentTitle, incidentSeverity, applicationName, rcaJson);
+
+                %s
+                """.formatted(incidentTitle, incidentSeverity, applicationName, rcaJson,
+                outputConverter.getFormat());
 
         try {
-            return chatClient.prompt()
-                    .system(SYSTEM_PROMPT)
-                    .user(userPrompt)
+            String rawResponse = chatClient.prompt()
+                    .messages(new SystemMessage(SYSTEM_PROMPT), new UserMessage(userPrompt))
                     .call()
-                    .entity(RemediationOutput.class);
+                    .content();
+            return outputConverter.convert(rawResponse);
         } catch (RuntimeException e) {
             throw new LlmUnavailableException("Remediation recommendation LLM call failed: " + e.getMessage(), e);
         }

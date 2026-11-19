@@ -1,6 +1,9 @@
 package com.ai.aiops.agent;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.stereotype.Component;
 
 import com.ai.aiops.common.exception.LlmUnavailableException;
@@ -40,10 +43,12 @@ public class RootCauseAnalysisAgent {
 
     private final ChatClient chatClient;
     private final ObjectMapper objectMapper;
+    private final BeanOutputConverter<RcaOutput> outputConverter;
 
     public RootCauseAnalysisAgent(ChatClient chatClient) {
         this.chatClient = chatClient;
         this.objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        this.outputConverter = new BeanOutputConverter<>(RcaOutput.class);
     }
 
     public RcaOutput analyze(InvestigationContext context) {
@@ -54,6 +59,11 @@ public class RootCauseAnalysisAgent {
             throw new IllegalStateException("Failed to serialize investigation context", e);
         }
 
+        // The format instructions are appended as plain string concatenation, not via
+        // ChatClient's .entity(Class) convenience method - that method internally re-renders the
+        // combined prompt text through Spring AI's {}-delimited PromptTemplate to splice the
+        // instructions in, and that re-render chokes on raw JSON's literal { } characters
+        // (evidenceJson above is exactly that). Converting the response ourselves sidesteps it.
         String userPrompt = """
                 Investigate incident "%s" (severity %s) on application "%s".
 
@@ -61,15 +71,17 @@ public class RootCauseAnalysisAgent {
                 %s
 
                 Produce a root cause analysis using only the information in EVIDENCE above.
+
+                %s
                 """.formatted(context.incidentTitle(), context.incidentSeverity(), context.applicationName(),
-                evidenceJson);
+                evidenceJson, outputConverter.getFormat());
 
         try {
-            return chatClient.prompt()
-                    .system(SYSTEM_PROMPT)
-                    .user(userPrompt)
+            String rawResponse = chatClient.prompt()
+                    .messages(new SystemMessage(SYSTEM_PROMPT), new UserMessage(userPrompt))
                     .call()
-                    .entity(RcaOutput.class);
+                    .content();
+            return outputConverter.convert(rawResponse);
         } catch (RuntimeException e) {
             throw new LlmUnavailableException("Root cause analysis LLM call failed: " + e.getMessage(), e);
         }

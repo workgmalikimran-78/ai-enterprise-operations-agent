@@ -26,6 +26,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AiopsException.class)
     public ResponseEntity<ApiError> handleAiopsException(AiopsException ex, WebRequest request) {
+        // Logged with the full cause chain even though this is a "handled" error response - an
+        // LlmUnavailableException's message alone (e.g. wrapping a third-party SDK's generic
+        // RuntimeException) is rarely enough to diagnose the actual failure without the trace.
+        log.warn("{} for request {}: {}", ex.getClass().getSimpleName(), path(request), ex.getMessage(), ex);
         ApiError error = ApiError.of(
                 ex.getStatus().value(),
                 ex.getStatus().getReasonPhrase(),

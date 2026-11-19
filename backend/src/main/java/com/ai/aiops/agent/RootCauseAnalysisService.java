@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,9 @@ public class RootCauseAnalysisService {
     private final RootCauseAnalysisRepository rcaRepository;
     private final AgentExecutionRepository agentExecutionRepository;
     private final ObjectMapper objectMapper;
+
+    @Value("${aiops.llm.provider:openai}")
+    private String llmProvider;
 
     public RootCauseAnalysisService(IncidentRepository incidentRepository, InvestigationAgent investigationAgent,
                                      RootCauseAnalysisAgent rcaAgent, RootCauseAnalysisRepository rcaRepository,
@@ -82,7 +86,7 @@ public class RootCauseAnalysisService {
         analysis.setIncident(incident);
         analysis.setSummary(output.summary());
         analysis.setConfidence(clampConfidence(output.confidence()));
-        analysis.setLlmProvider("openai");
+        analysis.setLlmProvider(llmProvider);
         analysis.setRawResponse(outputMap);
         RootCauseAnalysis saved = rcaRepository.save(analysis);
 
