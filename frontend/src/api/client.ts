@@ -7,6 +7,7 @@ import type {
   DashboardOverview,
   Incident,
   LogEvent,
+  LogFileUploadResult,
   OperationalAudit,
   PagedResponse,
   RcaAnalysis,
@@ -45,6 +46,17 @@ export const api = {
   logs: {
     search: (params: { service?: string; level?: string; q?: string }) =>
       http.get<PagedResponse<LogEvent>>('/logs/search', { params: { ...params, size: 50 } }).then((r) => r.data),
+    upload: (file: File, service: string, environment: string) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('service', service)
+      formData.append('environment', environment)
+      return http
+        .post<LogFileUploadResult>('/logs/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+        .then((r) => r.data)
+    },
   },
   anomalies: {
     list: (status?: string) =>

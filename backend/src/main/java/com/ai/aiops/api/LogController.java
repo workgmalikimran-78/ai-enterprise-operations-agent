@@ -13,10 +13,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.ai.aiops.api.dto.LogEventResponse;
+import com.ai.aiops.api.dto.LogFileUploadResponse;
 import com.ai.aiops.api.dto.LogIngestRequest;
 import com.ai.aiops.api.dto.PagedResponse;
+import com.ai.aiops.logs.LogFileIngestService;
 import com.ai.aiops.logs.LogIngestService;
 import com.ai.aiops.logs.LogSearchService;
 
@@ -28,15 +31,25 @@ public class LogController {
 
     private final LogIngestService logIngestService;
     private final LogSearchService logSearchService;
+    private final LogFileIngestService logFileIngestService;
 
-    public LogController(LogIngestService logIngestService, LogSearchService logSearchService) {
+    public LogController(LogIngestService logIngestService, LogSearchService logSearchService,
+                          LogFileIngestService logFileIngestService) {
         this.logIngestService = logIngestService;
         this.logSearchService = logSearchService;
+        this.logFileIngestService = logFileIngestService;
     }
 
     @PostMapping("/ingest")
     public ResponseEntity<LogEventResponse> ingest(@Valid @RequestBody LogIngestRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(logIngestService.ingest(request));
+    }
+
+    @PostMapping(value = "/upload", consumes = "multipart/form-data")
+    public LogFileUploadResponse upload(@RequestParam("file") MultipartFile file,
+                                         @RequestParam String service,
+                                         @RequestParam String environment) {
+        return logFileIngestService.upload(file, service, environment);
     }
 
     @GetMapping("/search")

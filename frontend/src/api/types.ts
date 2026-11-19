@@ -125,6 +125,13 @@ export interface Anomaly {
   createdAt: string
 }
 
+export interface LogFileUploadResult {
+  entriesParsed: number
+  entriesIngested: number
+  entriesFailed: number
+  errors: string[]
+}
+
 export interface AgentExecution {
   id: string
   incidentId: string | null
