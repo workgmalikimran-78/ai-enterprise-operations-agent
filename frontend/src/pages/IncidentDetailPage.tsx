@@ -37,6 +37,10 @@ export function IncidentDetailPage() {
     mutationFn: () => api.incidents.recommend(id),
     onSuccess: invalidateAll,
   })
+  const execute = useMutation({
+    mutationFn: (recommendationId: string) => api.remediations.execute(recommendationId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['incident', id, 'recommendations'] }),
+  })
 
   if (incident.isLoading) return <p className="text-sm text-slate-500">Loading…</p>
   if (!incident.data) return <p className="text-sm text-red-600">Incident not found.</p>
@@ -147,13 +151,31 @@ export function IncidentDetailPage() {
                 {rec.rollbackStrategy && (
                   <p className="text-xs text-slate-400 mt-1">Rollback: {rec.rollbackStrategy}</p>
                 )}
+                {rec.requiredApprovalLevel === 'NONE' && rec.status === 'PROPOSED' && (
+                  <div className="mt-2">
+                    <button
+                      onClick={() => execute.mutate(rec.id)}
+                      disabled={execute.isPending}
+                      className="text-xs font-medium bg-indigo-600 text-white px-2.5 py-1 rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {execute.isPending ? 'Executing…' : 'Execute now (no approval required)'}
+                    </button>
+                    {execute.isError && (
+                      <p className="text-xs text-red-600 mt-1">
+                        Execution failed: {(execute.error as Error).message}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
-        <Link to="/remediation" className="text-sm text-indigo-700 hover:underline mt-3 inline-block">
-          Go to Remediation Center to approve/execute →
-        </Link>
+        {recommendations.data?.some((rec) => rec.requiredApprovalLevel !== 'NONE' && rec.status !== 'EXECUTED') && (
+          <Link to="/remediation" className="text-sm text-indigo-700 hover:underline mt-3 inline-block">
+            Go to Remediation Center to approve/execute →
+          </Link>
+        )}
       </Card>
 
       <Card title="Agent Execution Trace">
