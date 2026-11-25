@@ -11,6 +11,7 @@ data:
   SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
   AIOPS_OPENSEARCH_HOST: opensearch
   AIOPS_OPENSEARCH_PORT: "9200"
+  AIOPS_LAKE_ENDPOINT: http://lake:4566
   # Execution tools operate against the "default" namespace of THIS cluster by default - change
   # to match wherever the application deployments you want to manage actually live.
   AIOPS_EXECUTION_ALLOWED_NAMESPACES: default
@@ -27,3 +28,9 @@ stringData:
   # (e.g. External Secrets Operator, Sealed Secrets) over stringData in a real environment.
   postgres-password: "CHANGE_ME"
   openai-api-key: "CHANGE_ME"
+  lake-access-key: "CHANGE_ME"
+  lake-secret-key: "CHANGE_ME"
+  # Shared-secret bearer token for the MCP server (16-mcp-server.yaml) - optional (that Deployment
+  # marks this key `optional: true`), but several MCP tools execute real cluster mutations, so set
+  # this before exposing the MCP server beyond a trusted local network.
+  mcp-api-key: "CHANGE_ME"

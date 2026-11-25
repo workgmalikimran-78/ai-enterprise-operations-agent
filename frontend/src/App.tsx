@@ -7,6 +7,7 @@ import { IncidentsListPage } from './pages/IncidentsListPage'
 import { IncidentDetailPage } from './pages/IncidentDetailPage'
 import { RemediationCenterPage } from './pages/RemediationCenterPage'
 import { AuditCenterPage } from './pages/AuditCenterPage'
+import { DataPlatformPage } from './pages/DataPlatformPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,6 +30,7 @@ function App() {
             <Route path="incidents/:id" element={<IncidentDetailPage />} />
             <Route path="remediation" element={<RemediationCenterPage />} />
             <Route path="audit" element={<AuditCenterPage />} />
+            <Route path="data-platform" element={<DataPlatformPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

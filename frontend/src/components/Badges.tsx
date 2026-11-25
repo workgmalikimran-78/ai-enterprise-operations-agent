@@ -22,6 +22,15 @@ const statusColors: Record<string, string> = {
   PROPOSED: 'bg-slate-100 text-slate-700',
   APPROVAL_REQUESTED: 'bg-amber-100 text-amber-800',
   EXECUTED: 'bg-emerald-100 text-emerald-800',
+  PASS: 'bg-emerald-100 text-emerald-800',
+  FAIL: 'bg-red-100 text-red-800',
+  WARN: 'bg-amber-100 text-amber-800',
+}
+
+const classificationColors: Record<string, string> = {
+  PUBLIC: 'bg-slate-100 text-slate-600',
+  INTERNAL: 'bg-blue-100 text-blue-800',
+  CONFIDENTIAL: 'bg-red-100 text-red-800',
 }
 
 function Badge({ label, colorClass }: { label: string; colorClass: string }) {
@@ -38,4 +47,13 @@ export function SeverityBadge({ severity }: { severity: string }) {
 
 export function StatusBadge({ status }: { status: string }) {
   return <Badge label={status.replace(/_/g, ' ')} colorClass={statusColors[status] ?? 'bg-slate-100 text-slate-700'} />
+}
+
+export function ClassificationBadge({ classification }: { classification: string }) {
+  return (
+    <Badge
+      label={classification}
+      colorClass={classificationColors[classification] ?? 'bg-slate-100 text-slate-700'}
+    />
+  )
 }

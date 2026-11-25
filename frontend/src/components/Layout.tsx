@@ -6,6 +6,7 @@ const navItems = [
   { to: '/incidents', label: 'Incidents' },
   { to: '/remediation', label: 'Remediation Center' },
   { to: '/audit', label: 'Audit Center' },
+  { to: '/data-platform', label: 'Data Platform' },
 ]
 
 export function Layout() {

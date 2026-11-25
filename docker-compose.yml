@@ -79,6 +79,30 @@ services:
       opensearch:
         condition: service_healthy
 
+  # S3-compatible local object storage for the bronze data lake. MinIO's own image stopped being
+  # pullable anonymously from Docker Hub/Quay/GHCR (MinIO Inc restricted free image access), so
+  # this uses LocalStack's community edition (S3 only) instead - same generic AWS S3 API, no
+  # application code depends on which one is running. For a real deployment, point
+  # AIOPS_LAKE_ENDPOINT at real object storage (AWS S3, GCS's S3 interop, or a self-hosted MinIO
+  # you pull with your own Docker Hub login) instead of this container.
+  lake:
+    image: localstack/localstack:3
+    container_name: aiops-lake
+    environment:
+      SERVICES: s3
+    ports:
+      - "9002:4566"
+    volumes:
+      - aiops-lake-data:/var/lib/localstack
+    healthcheck:
+      # LocalStack reports s3 as "available" right after startup, then "running" once it's handled
+      # its first request - match either, not just "available" (which made this healthcheck flap
+      # to unhealthy as soon as the app's own first S3 call landed).
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep -qE '\"s3\": *\"(available|running)\"'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   app:
     build:
       context: ./backend
@@ -91,6 +115,9 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       AIOPS_OPENSEARCH_HOST: opensearch
       AIOPS_OPENSEARCH_PORT: 9200
+      AIOPS_LAKE_ENDPOINT: http://lake:4566
+      AIOPS_LAKE_ACCESS_KEY: ${AIOPS_LAKE_ACCESS_KEY:-aiopsminio}
+      AIOPS_LAKE_SECRET_KEY: ${AIOPS_LAKE_SECRET_KEY:-aiopsminio123}
       # Was previously undeclared here, so setting it on the host before `docker compose up` had
       # no effect on the container - the app always started with no key configured.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -107,6 +134,8 @@ services:
         condition: service_healthy
       opensearch:
         condition: service_healthy
+      lake:
+        condition: service_healthy
 
   frontend:
     build:
@@ -117,5 +146,22 @@ services:
     depends_on:
       - app
 
+  # Standalone MCP server: exposes the backend's REST API as MCP tools so any MCP client (Claude
+  # Desktop, Claude Code, etc.) can query/drive this platform directly. Thin HTTP proxy, no state
+  # of its own - see mcp-server/README.md and ARCHITECTURE.md's MCP section for the tool list.
+  mcp-server:
+    build:
+      context: ./mcp-server
+    container_name: aiops-mcp-server
+    environment:
+      AIOPS_API_BASE_URL: http://app:8080/api/v1
+      MCP_ALLOWED_HOSTS: localhost,127.0.0.1,mcp-server
+      MCP_API_KEY: ${MCP_API_KEY:-}
+    ports:
+      - "8090:3000"
+    depends_on:
+      - app
+
 volumes:
   aiops-postgres-data:
+  aiops-lake-data:

@@ -5,6 +5,12 @@ import type {
   ApprovalRequest,
   DashboardMetrics,
   DashboardOverview,
+  DataCatalogEntry,
+  DataQualityCheck,
+  EtlRunLog,
+  FactIncidentDaily,
+  FactLogVolumeHourly,
+  FactRemediationDaily,
   Incident,
   LogEvent,
   LogFileUploadResult,
@@ -87,5 +93,21 @@ export const api = {
       http
         .get<PagedResponse<AgentExecution>>('/audit/agent-executions', { params: { size: 50 } })
         .then((r) => r.data),
+  },
+  warehouse: {
+    catalog: () => http.get<DataCatalogEntry[]>('/warehouse/catalog').then((r) => r.data),
+    qualityChecks: () =>
+      http
+        .get<PagedResponse<DataQualityCheck>>('/warehouse/quality-checks', { params: { size: 20 } })
+        .then((r) => r.data),
+    etlRuns: () =>
+      http.get<PagedResponse<EtlRunLog>>('/warehouse/etl-runs', { params: { size: 10 } }).then((r) => r.data),
+    runEtlNow: () => http.post<EtlRunLog>('/warehouse/etl/run').then((r) => r.data),
+    incidentsDaily: () =>
+      http.get<FactIncidentDaily[]>('/warehouse/metrics/incidents-daily').then((r) => r.data),
+    remediationDaily: () =>
+      http.get<FactRemediationDaily[]>('/warehouse/metrics/remediation-daily').then((r) => r.data),
+    logVolumeHourly: () =>
+      http.get<FactLogVolumeHourly[]>('/warehouse/metrics/log-volume-hourly').then((r) => r.data),
   },
 }

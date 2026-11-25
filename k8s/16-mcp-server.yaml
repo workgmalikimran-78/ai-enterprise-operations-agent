@@ -1,0 +1,43 @@
+# Standalone MCP server - exposes the backend's REST API as MCP tools. Thin stateless proxy, no
+# persistent state, no dependency beyond reaching the app service. See ARCHITECTURE.md's MCP
+# section and mcp-server/README.md for the tool list and how to point an MCP client at it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-server
+  namespace: aiops
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mcp-server }
+  template:
+    metadata:
+      labels: { app: mcp-server }
+    spec:
+      containers:
+        - name: mcp-server
+          image: aiops-mcp-server:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 3000 }]
+          env:
+            - { name: AIOPS_API_BASE_URL, value: "http://aiops-app:8080/api/v1" }
+            - { name: MCP_ALLOWED_HOSTS, value: "mcp-server,localhost,127.0.0.1" }
+            - name: MCP_API_KEY
+              valueFrom:
+                secretKeyRef: { name: aiops-secrets, key: mcp-api-key, optional: true }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-server
+  namespace: aiops
+spec:
+  selector: { app: mcp-server }
+  ports: [{ port: 3000, targetPort: 3000 }]

@@ -86,3 +86,12 @@ aiops:
     default-namespace: default
   verification:
     check-interval-minutes: 5
+  warehouse:
+    etl:
+      interval-minutes: 60
+      lookback-days-on-first-run: 7
+  lake:
+    bucket: aiops-lake
+    access-key: ${AIOPS_LAKE_ACCESS_KEY:aiopsminio}
+    secret-key: ${AIOPS_LAKE_SECRET_KEY:aiopsminio123}
+    retention-days: 90

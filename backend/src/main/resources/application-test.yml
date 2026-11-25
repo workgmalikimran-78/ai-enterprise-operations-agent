@@ -13,3 +13,9 @@ aiops:
     host: localhost
     port: 9200
     scheme: http
+  lake:
+    # Overridden via @DynamicPropertySource by tests that spin up a Testcontainers LocalStack
+    # (see WarehouseEtlJobIntegrationTest); this default just needs to be a resolvable URI so
+    # context-loading tests that don't touch the lake can start - DataLakeWriter's startup check
+    # logs a warning rather than failing if unreachable.
+    endpoint: http://localhost:9002

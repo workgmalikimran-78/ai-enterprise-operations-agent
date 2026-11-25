@@ -142,3 +142,68 @@ export interface AgentExecution {
   startedAt: string | null
   completedAt: string | null
 }
+
+export interface DataCatalogEntry {
+  id: string
+  datasetName: string
+  layer: 'OLTP' | 'BRONZE' | 'WAREHOUSE' | 'SEARCH_INDEX'
+  location: string
+  owner: string
+  classification: 'PUBLIC' | 'INTERNAL' | 'CONFIDENTIAL'
+  containsPii: boolean
+  retentionDays: number | null
+  description: string | null
+  createdAt: string
+}
+
+export interface DataQualityCheck {
+  id: string
+  etlRunId: string | null
+  checkName: string
+  datasetName: string
+  runAt: string
+  status: 'PASS' | 'FAIL' | 'WARN'
+  rowCount: number | null
+  details: Record<string, unknown> | null
+}
+
+export interface EtlRunLog {
+  id: string
+  jobName: string
+  startedAt: string
+  completedAt: string | null
+  status: 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+  watermarkFrom: string | null
+  watermarkTo: string | null
+  rowsExtracted: number
+  rowsLoaded: number
+  errorMessage: string | null
+}
+
+export interface FactIncidentDaily {
+  dateId: string
+  applicationId: string
+  applicationName: string | null
+  severity: Severity
+  incidentsOpened: number
+  incidentsResolved: number
+  avgMttrSeconds: number | null
+}
+
+export interface FactRemediationDaily {
+  dateId: string
+  applicationId: string
+  applicationName: string | null
+  actionType: string
+  executionsTotal: number
+  executionsSucceeded: number
+  executionsFailed: number
+}
+
+export interface FactLogVolumeHourly {
+  hourBucket: string
+  applicationId: string
+  applicationName: string | null
+  level: string
+  eventCount: number
+}

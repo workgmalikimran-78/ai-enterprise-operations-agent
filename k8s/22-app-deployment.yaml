@@ -28,6 +28,12 @@ spec:
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef: { name: aiops-secrets, key: openai-api-key }
+            - name: AIOPS_LAKE_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: { name: aiops-secrets, key: lake-access-key }
+            - name: AIOPS_LAKE_SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: aiops-secrets, key: lake-secret-key }
           readinessProbe:
             httpGet: { path: /actuator/health, port: 8080 }
             initialDelaySeconds: 20

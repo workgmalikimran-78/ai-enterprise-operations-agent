@@ -30,8 +30,8 @@ gitignored - docker-compose reads it automatically, no need to export anything b
 ```bash
 cp .env.example .env
 # edit .env: set AIOPS_LLM_PROVIDER=openai or anthropic, and the matching API key
-docker compose up -d postgres redis kafka opensearch   # wait for all to report healthy
-docker compose up -d --build app frontend
+docker compose up -d postgres redis kafka opensearch lake   # wait for all to report healthy
+docker compose up -d --build app frontend mcp-server
 ```
 
 Services and their **host-mapped** ports (remapped from Kafka/Postgres/Redis/OpenSearch
@@ -46,6 +46,8 @@ defaults to avoid clashing with other projects running on this machine):
 | Kafka | 9093 (external), 9092 (internal) | KRaft mode, no Zookeeper. Dual listeners so both containers and host-based clients can connect |
 | OpenSearch | 9201 | security plugin disabled for local dev |
 | OpenSearch Dashboards | 5602 | |
+| Data Lake | 9002 | LocalStack S3 - bronze layer for the warehouse ETL job, see `ARCHITECTURE.md` §13 |
+| MCP Server | 8090 | Exposes the REST API as MCP tools at `/mcp` - see `ARCHITECTURE.md` §15 and `mcp-server/README.md` |
 
 Open **http://localhost:3001** for the dashboard — the frontend container's nginx config
 (`frontend/nginx.conf`) proxies `/api/*` to `http://app:8080` on the internal Docker network, and
@@ -236,6 +238,36 @@ curl http://localhost:8081/api/v1/audit/agent-executions # every agent run, succ
 
 Same data as the **Overview** and **Audit Center** pages.
 
+### 8. Data platform (analytics warehouse, bronze lake, governance)
+
+Runs automatically every hour (`aiops.warehouse.etl.interval-minutes`) once the app has been up for
+that long; trigger it immediately instead:
+
+```bash
+curl -X POST http://localhost:8081/api/v1/warehouse/etl/run   # extract -> bronze lake -> warehouse facts
+curl http://localhost:8081/api/v1/warehouse/etl-runs           # run history (status, row counts)
+curl http://localhost:8081/api/v1/warehouse/quality-checks     # completeness/freshness/integrity/PII-safety
+curl http://localhost:8081/api/v1/warehouse/catalog            # every dataset's layer/classification/retention
+curl http://localhost:8081/api/v1/warehouse/metrics/incidents-daily
+```
+
+Same data as the **Data Platform** page (which also has the "Run ETL now" button). See
+`ARCHITECTURE.md` §13 for the design.
+
+### 9. Connecting an MCP client
+
+Everything above is also reachable as MCP tools, via the standalone server in `mcp-server/`
+(`docker compose up -d --build mcp-server`, listens on `http://localhost:8090/mcp`):
+
+```bash
+claude mcp add --transport http aiops http://localhost:8090/mcp
+```
+
+Then ask it things like "list open incidents", "investigate incident X", or "run the warehouse ETL
+job" — each maps to one of the 29 tools wrapping this same REST API. See `mcp-server/README.md` for
+the full connection instructions (including Claude Desktop's config) and `ARCHITECTURE.md` §15 for
+the tool list and design.
+
 ## Running the test suite
 
 ```bash
@@ -285,7 +317,18 @@ package build, a frontend type-check + build, and a Docker image build sanity ch
   live-verified against a real k3s cluster
 - Post-remediation verification agent comparing error volume before/after, on a schedule
 - React + TypeScript dashboard: Overview, Live Monitoring, Incidents (list + detail), Remediation
-  Center, Audit Center — all wired to the real backend, verified live in a browser
+  Center, Audit Center, Data Platform — all wired to the real backend, verified live in a browser
+- Data architecture layer (`com.ai.aiops.warehouse`): an hourly ETL/ELT job extracts OLTP data,
+  writes it raw to an S3-compatible bronze data lake, and aggregates it into a dimensional
+  `analytics` warehouse schema (fact/dim tables, PII-safe by construction — no free-text columns),
+  with automated data quality checks and a governance catalog covering every dataset in the
+  platform. See `ARCHITECTURE.md` §13 for the full design and `/api/v1/warehouse/*` for the API —
+  verified live end-to-end (ETL run → bronze object → warehouse facts → dashboard charts)
+- Standalone MCP server (`mcp-server/`): exposes the REST API as 29 MCP tools so Claude Desktop,
+  Claude Code, or any other MCP client can query or drive the platform directly — see
+  `ARCHITECTURE.md` §15 and `mcp-server/README.md` for the tool list and how to connect a client.
+  Verified live end-to-end over the real Streamable HTTP transport, in Docker, against the real
+  backend
 - GitHub Actions CI (backend tests, frontend build, Docker build check) and Kubernetes manifests
 
 **Deferred (explicitly out of scope for this pass):**

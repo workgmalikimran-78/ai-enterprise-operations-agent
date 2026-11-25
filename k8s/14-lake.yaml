@@ -1,0 +1,56 @@
+# S3-compatible local object storage for the bronze data lake - LocalStack's community edition
+# (S3 only), same reasoning as docker-compose.yml's "lake" service: MinIO's own image is no longer
+# pullable anonymously. For a real deployment, point AIOPS_LAKE_ENDPOINT (in 20-app-config.yaml) at
+# real object storage (AWS S3, GCS's S3 interop, or a self-hosted MinIO you pull with your own
+# Docker Hub login) and drop this manifest entirely - nothing in the app depends on which one runs.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lake-data
+  namespace: aiops
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests: { storage: 5Gi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lake
+  namespace: aiops
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: lake }
+  template:
+    metadata:
+      labels: { app: lake }
+    spec:
+      containers:
+        - name: lake
+          image: localstack/localstack:3
+          ports: [{ containerPort: 4566 }]
+          env:
+            - { name: SERVICES, value: s3 }
+            - { name: DEFAULT_REGION, value: us-east-1 }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/localstack }
+          resources:
+            requests: { memory: "512Mi" }
+            limits: { memory: "1Gi" }
+          readinessProbe:
+            httpGet: { path: /_localstack/health, port: 4566 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: lake-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lake
+  namespace: aiops
+spec:
+  selector: { app: lake }
+  ports: [{ port: 4566, targetPort: 4566 }]

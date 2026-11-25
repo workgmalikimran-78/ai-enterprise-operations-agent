@@ -15,3 +15,5 @@ aiops:
     host: localhost
     port: 9201
     scheme: http
+  lake:
+    endpoint: http://localhost:9002
