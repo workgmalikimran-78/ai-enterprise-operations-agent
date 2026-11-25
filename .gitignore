@@ -22,8 +22,10 @@ frontend/.vite/
 # OS
 .DS_Store
 
-# Claude Code local state
-.claude/
+# Claude Code local state - settings.json, rules/, commands/, agents/, hooks/ ARE committed
+# (shared team config); only personal/local overrides are ignored.
+.claude/settings.local.json
+CLAUDE.local.md
 
 # Logs
 *.log
